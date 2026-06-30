@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Finance Chatbot – Dev Test</title>
+  <style>
+    body { font-family: 'Inter'; max-width: 720px; margin: 40px auto; padding: 0 16px; background: #fff; }
+    h2 { font-size: 16px; margin-bottom: 4px; }
+    #log { border: 1px solid #ccc; height: 400px; overflow-y: auto; padding: 12px; margin-bottom: 8px; white-space: pre-wrap; font-size: 13px; background: #fafafa; }
+    #log .user { color: #2a78d6; }
+    #log .bot  { color: #222; }
+    #log .chart-notice { color: #888; font-style: italic; }
+    #log .error { color: red; }
+    #log .user-image-thumb { max-width: 160px; max-height: 160px; display: block; margin: 4px 0; border: 1px solid #ccc; border-radius: 4px; }
+    #input-row { display: flex; gap: 8px; align-items: center; }
+    input[type=text] { flex: 1; padding: 8px; font-family: 'Inter'; font-size: 13px; border: 1px solid #ccc; }
+    button { padding: 8px 14px; font-family: 'Inter'; cursor: pointer; border: 1px solid #ccc; }
+    button:hover { background-color: #e8e8e8; }
+    #chart-area { margin-top: 16px; display: none; }
+    canvas { max-width: 100%; }
+    #customer-info { font-size: 12px; color: #555; background: #f0f0f0; padding: 10px; margin-bottom: 8px; border: 1px solid #ddd; }
+    .starter-btns { margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .starter-btns button { font-size: 11px; padding: 4px 8px; background: #f5f5f5; }
+    #customer-picker { margin-bottom: 12px; display: flex; gap: 6px; align-items: center; font-size: 12px; }
+    #customer-picker select { font-family: 'Inter'; font-size: 12px; padding: 4px; }
+
+    /* Image preview tray — sits above the input row when image(s) are staged */
+    #preview-tray { display: none; flex-wrap: wrap; gap: 8px; padding: 8px; margin-bottom: 6px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 6px; }
+    .preview-item { position: relative; }
+    .preview-item img { width: 64px; height: 64px; object-fit: cover; border-radius: 4px; border: 1px solid #ccc; display: block; }
+    .preview-remove { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; background: #c00; color: #fff; border: none; font-size: 11px; line-height: 1; cursor: pointer; padding: 0; }
+    .preview-name { font-size: 9px; color: #666; max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+
+    /* Compliance / info panel */
+    #panel-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.35); z-index: 1000;
+    }
+    #panel-backdrop.open { display: block; }
+
+    #compliance-panel {
+      position: fixed; top: 0; right: -480px; width: 460px; max-width: 95vw;
+      height: 100vh; background: #fff; border-left: 1px solid #ccc;
+      box-shadow: -4px 0 18px rgba(0,0,0,0.12);
+      overflow-y: auto; z-index: 1001;
+      transition: right 0.28s ease;
+      padding: 28px 28px 48px;
+      box-sizing: border-box;
+      font-family: 'Inter'; font-size: 13px; line-height: 1.7; color: #222;
+    }
+    #compliance-panel.open { right: 0; }
+
+    #panel-close {
+      position: absolute; top: 14px; right: 16px;
+      background: none; border: none; font-size: 20px;
+      cursor: pointer; color: #555; padding: 4px 8px;
+    }
+    #panel-close:hover { color: #000; background: #f0f0f0; border-radius: 4px; }
+
+    #compliance-panel h3 {
+      font-size: 15px; margin: 24px 0 6px; border-bottom: 1px solid #e0e0e0;
+      padding-bottom: 4px; color: #111;
+    }
+    #compliance-panel h3:first-of-type { margin-top: 8px; }
+    #compliance-panel p { margin: 6px 0 10px; }
+    #compliance-panel ul { margin: 4px 0 10px; padding-left: 18px; }
+    #compliance-panel li { margin-bottom: 5px; }
+    #compliance-panel .tag {
+      display: inline-block; font-size: 10px; padding: 2px 7px;
+      border-radius: 10px; margin-right: 4px; margin-bottom: 3px;
+      font-family: 'Inter'; vertical-align: middle;
+    }
+    #compliance-panel .tag-law  { background: #dbeafe; color: #1e40af; }
+    #compliance-panel .tag-safe { background: #dcfce7; color: #166534; }
+    #compliance-panel .tag-no   { background: #fee2e2; color: #991b1b; }
+    #compliance-panel .divider  { border: none; border-top: 1px solid #eee; margin: 18px 0; }
+    #compliance-panel .panel-intro {
+      background: #f0f6ff; border-left: 3px solid #2a78d6;
+      padding: 10px 14px; border-radius: 0 4px 4px 0; margin-bottom: 16px;
+      font-size: 12px; color: #444;
+    }
+    #compliance-panel a { color: #2a78d6; }
+
+    /* Info button in header */
+    #info-btn {
+      float: right; margin-top: -2px;
+      font-size: 11px; padding: 4px 10px;
+      background: #fff; border: 1px solid #2a78d6;
+      color: #2a78d6; border-radius: 4px; cursor: pointer;
+    }
+    #info-btn:hover { background: #eef4ff; }
+    #drop-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(42, 120, 214, 0.08);
+      border: 3px dashed #2a78d6;
+      border-radius: 8px;
+      z-index: 999;
+      pointer-events: none; /* let dragover/drop fire on the real listeners below */
+      align-items: center;
+      justify-content: center;
+    }
+    #drop-overlay.active { display: flex; }
+    #drop-overlay-label {
+      background: #fff;
+      border: 2px solid #2a78d6;
+      border-radius: 6px;
+      padding: 16px 28px;
+      font-size: 14px;
+      color: #2a78d6;
+      pointer-events: none;
+    }
+
+    /* Subtle highlight on the input row when drag is in progress */
+    #input-row.drag-over { background: #eef4ff; border-radius: 6px; }
+    .typing-dots { display: inline-flex; gap: 3px; padding: 2px 0; }
+    .typing-dots span {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #888; display: inline-block;
+      animation: bounce 1.2s infinite ease-in-out both;
+    }
+    .typing-dots span:nth-child(1) { animation-delay: 0s; }
+    .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Drag-and-drop overlay: appears full-screen when user drags a file over the page -->
+  <div id="drop-overlay"><div id="drop-overlay-label">Drop image here</div></div>
+
+  <h2 style="background-color: lightblue; padding: 5px;">
+    Finance Chatbot — backend test harness
+    <button id="info-btn" onclick="openPanel()">Regulations &amp; Info</button>
+  </h2>
+
+  <!-- ─── Compliance / Info side panel ─────────────────────────── -->
+  <div id="panel-backdrop" onclick="closePanel()"></div>
+  <div id="compliance-panel" role="dialog" aria-modal="true" aria-label="Regulations and Information">
+    <button id="panel-close" onclick="closePanel()" title="Close">✕</button>
+
+    <h3 style="font-size:17px; border:none; margin-top:0;">About This Chatbot</h3>
+    <div class="panel-intro">
+      This is an AI-powered financial assistant. It reads your transaction data and answers
+      questions in plain English. It is <strong>not</strong> a licensed financial advisor,
+      bank, or broker. It is a decision-support tool — it helps you understand your own data
+      so you can make better-informed choices.
+    </div>
+
+    <h3>What It Is</h3>
+    <p>This chatbot is built on <strong>Claude (Anthropic)</strong>, a large language model.
+    It is given your account profile and transaction history at the start of each session and
+    uses that context to answer questions, spot patterns, generate charts, and read uploaded
+    images such as receipts or bank statements.</p>
+    <p>It is designed to be a <em>guide</em>, not a decision-maker. Every number it gives
+    you comes directly from your own data — it does not speculate, invent figures, or connect
+    to live market data.</p>
+
+    <hr class="divider">
+
+    <h3>Regulatory Alignment</h3>
+    <p>This tool is designed to operate consistently with the following U.S. and international
+    frameworks:</p>
+
+    <p><span class="tag tag-law">U.S. Law</span> <strong>Gramm-Leach-Bliley Act (GLBA)</strong><br>
+    Requires financial institutions to explain data-sharing practices and protect sensitive
+    customer information. This chatbot does not share, sell, or transmit your financial data
+    to third parties. Data is used solely within the session to answer your questions.</p>
+
+    <p><span class="tag tag-law">U.S. Law</span> <strong>Consumer Financial Protection Bureau (CFPB) Guidelines</strong><br>
+    The CFPB requires that financial tools be fair, transparent, and not misleading. This
+    chatbot is instructed never to fabricate numbers, always cite real data, and
+    clearly state when something is outside its scope.</p>
+
+    <p><span class="tag tag-law">U.S. Law</span> <strong>Investment Advisers Act of 1940</strong><br>
+    Only registered investment advisers may provide personalized investment advice for
+    compensation. This chatbot is <em>explicitly prohibited</em> from giving investment advice,
+    stock picks, or portfolio recommendations. It will always redirect those questions
+    to a licensed professional.</p>
+
+    <p><span class="tag tag-law">U.S. Law</span> <strong>Equal Credit Opportunity Act (ECOA) / Fair Housing Act</strong><br>
+    AI systems in financial contexts must not discriminate based on race, color, religion,
+    sex, national origin, age, or disability. This chatbot does not use any demographic
+    attributes in its analysis — it only reads transaction data and stated account figures.</p>
+
+    <p><span class="tag tag-law">International</span> <strong>EU AI Act (2024) — Financial Services Provisions</strong><br>
+    The EU AI Act classifies AI used in credit scoring and financial decision-making as
+    high-risk, requiring transparency, human oversight, and explainability. While this
+    tool operates in the U.S., it is designed to meet the same standard: every answer
+    is traceable to specific data points, and users retain full control over decisions.</p>
+
+    <p><span class="tag tag-law">International</span> <strong>GDPR / Data Minimization Principle</strong><br>
+    Only the data necessary to answer your question is included in each AI call. Images
+    are never written to disk. Conversation history is capped and discarded automatically.
+    No personal data is retained across separate sessions.</p>
+
+    <hr class="divider">
+
+    <h3>What This Chatbot Will Always Do</h3>
+    <ul>
+      <li><span class="tag tag-safe">Safe</span> Use only your real transaction data — no invented numbers.</li>
+      <li><span class="tag tag-safe">Safe</span> Tell you plainly when something is outside its scope.</li>
+      <li><span class="tag tag-safe">Safe</span> Redirect investment, legal, and tax questions to licensed professionals.</li>
+      <li><span class="tag tag-safe">Safe</span> Flag if part of an uploaded image is unreadable rather than guess.</li>
+      <li><span class="tag tag-safe">Safe</span> Acknowledge uncertainty instead of filling gaps with assumptions.</li>
+      <li><span class="tag tag-safe">Safe</span> Treat your financial situation without judgment.</li>
+    </ul>
+
+    <h3>What This Chatbot Will Never Do</h3>
+    <ul>
+      <li><span class="tag tag-no">Never</span> Recommend specific stocks, funds, or investment products.</li>
+      <li><span class="tag tag-no">Never</span> Suggest payday loans, high-risk debt consolidation, or market timing.</li>
+      <li><span class="tag tag-no">Never</span> Store, log, or share your financial data outside this session.</li>
+      <li><span class="tag tag-no">Never</span> Make decisions on your behalf — it informs, you decide.</li>
+      <li><span class="tag tag-no">Never</span> Provide legal or tax advice.</li>
+      <li><span class="tag tag-no">Never</span> Use demographic attributes (race, gender, age, etc.) in any analysis.</li>
+      <li><span class="tag tag-no">Never</span> Double-count transactions from uploaded images without flagging it.</li>
+    </ul>
+
+    <hr class="divider">
+
+    <h3>Data Handling</h3>
+    <ul>
+      <li>Your transaction data is loaded into a secure session at login. It is passed to
+      the AI model only for the duration of your question — it is not stored by the AI
+      provider beyond that call.</li>
+      <li>Uploaded images (receipts, statements) are encoded in-browser, sent over HTTPS,
+      validated for type and size, used for one AI call, and then released from memory.
+      They are <strong>never written to disk</strong>.</li>
+      <li>Conversation history within a session is capped at the last 20 exchanges. Older
+      turns — including any images within them — are automatically purged from memory.</li>
+      <li>Resetting the conversation immediately clears all history for your session.</li>
+    </ul>
+
+    <h3>AI Model Transparency</h3>
+    <p>This tool uses <strong>Claude Sonnet (Anthropic)</strong>. Anthropic publishes its
+    model safety policies and usage guidelines publicly at
+    <a href="https://www.anthropic.com/policy" target="_blank" rel="noopener">anthropic.com/policy</a>.
+    The model is instructed via a system prompt that enforces all the behavioral rules
+    described on this page. Those rules cannot be overridden by user messages.</p>
+
+    <h3>Limitations</h3>
+    <ul>
+      <li>This tool reads only the data provided to it. It has no access to external accounts,
+      credit bureaus, or live market data.</li>
+      <li>AI can make mistakes. Always verify important figures against your actual bank
+      statements before acting on them.</li>
+      <li>This tool is not a substitute for a licensed financial advisor, CPA, or attorney.
+      For significant financial decisions, consult a qualified professional.</li>
+      <li>This is a demonstration / development build. Production deployments should add
+      authentication, audit logging, and formal regulatory review appropriate to their
+      jurisdiction.</li>
+    </ul>
+
+    <hr class="divider">
+    <p style="font-size:11px; color:#888; text-align:center;">
+      Finance Chatbot &nbsp;·&nbsp; Built with Claude (Anthropic) &nbsp;·&nbsp;
+      For questions about data practices, contact your financial institution.
+    </p>
+  </div>
+  <!-- ─── End compliance panel ──────────────────────────────────── -->
+
+  <div id="customer-picker">
+    <strong style="padding: 3px;">Test as:</strong>
+    <select id="customer-select" onchange="switchCustomer()">
+      <option value="alex">Alex Johnson (tight budget)</option>
+      <option value="priya">Priya Patel (healthy saver)</option>
+      <option value="marcus">Marcus Webb (high earner, debt)</option>
+    </select>
+  </div>
+
+  <div id="customer-info">Loading customer data…</div>
+
+  <div class="starter-btns">
+    <strong style="font-size:11px;align-self:center">Try:</strong>
+    <button onclick="send('Give me my full financial picture')">Full picture</button>
+    <button onclick="send('What did I spend the most on this month?')">Top spending</button>
+    <button onclick="send('Show me a chart of my spending by category')">Spending chart</button>
+    <button onclick="send('How am I doing on my savings goal?')">Savings goal</button>
+    <button onclick="send('What subscriptions am I paying for?')">Subscriptions</button>
+    <button onclick="send('Give me 3 ways to save more money')">Save more</button>
+  </div>
+
+  <div id="log"></div>
+
+  <!-- Image preview tray: shows thumbnails of staged images before sending -->
+  <div id="preview-tray"></div>
+
+  <div id="input-row">
+    <input id="image-upload" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple style="display:none" onchange="handleFileSelect(this.files)">
+    <button onclick="document.getElementById('image-upload').click()" title="Attach an image (receipt, statement, screenshot)">+</button>
+    <input id="msg" type="text" placeholder="Ask anything about your finances…" onkeydown="if(event.key==='Enter') send()">
+    <button onclick="send()">Send</button>
+    <button onclick="resetChat()" title="Clear conversation">Reset</button>
+  </div>
+
+  <div id="chart-area">
+    <canvas id="myChart"></canvas>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <script>
+    let SESSION_ID = "dev-" + Math.random().toString(36).slice(2, 8);
+    let CUSTOMER_ID = "alex";
+    let chartInstance = null;
+    let typingEl = null;
+
+    // Staged images waiting to be sent with the next message.
+    // Each entry: { mediaType, base64Data, fileName, previewUrl }
+    let stagedImages = [];
+
+    const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+    const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // keep in sync with backend MAX_IMAGE_BYTES
+    const MAX_IMAGES = 3;                    // keep in sync with backend MAX_IMAGES_PER_MESSAGE
+
+    const log   = document.getElementById("log");
+    const input = document.getElementById("msg");
+    const tray  = document.getElementById("preview-tray");
+
+    function appendLog(who, text) {
+      const line = document.createElement("div");
+      line.className = who;
+      line.textContent = (who === "user" ? "YOU: " : "BOT: ") + text;
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+      return line;
+    }
+
+    // Show small thumbnails of the images the user just sent, inline in the log
+    function appendUserImagesToLog(images) {
+      const wrap = document.createElement("div");
+      wrap.className = "user";
+      images.forEach(img => {
+        const el = document.createElement("img");
+        el.className = "user-image-thumb";
+        el.src = img.previewUrl;
+        el.alt = img.fileName;
+        wrap.appendChild(el);
+      });
+      log.appendChild(wrap);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function showTyping() {
+      typingEl = document.createElement("div");
+      typingEl.className = "bot";
+      typingEl.innerHTML = '<b>BOT</b>: <span class="typing-dots"><span></span><span></span><span></span></span>';
+      log.appendChild(typingEl);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function hideTyping() {
+      if (typingEl) {
+        typingEl.remove();
+        typingEl = null;
+      }
+    }
+
+    // ─── Image staging / preview ────────────────────────────────────
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          // result looks like "data:image/png;base64,AAAA..." — strip the prefix,
+          // the backend wants raw base64 only.
+          const result = reader.result;
+          const commaIdx = result.indexOf(",");
+          resolve(result.slice(commaIdx + 1));
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handleFileSelect(fileList) {
+      const files = Array.from(fileList);
+      document.getElementById("image-upload").value = ""; // allow re-selecting the same file later
+
+      for (const file of files) {
+        if (stagedImages.length >= MAX_IMAGES) {
+          appendLog("error", `You can attach at most ${MAX_IMAGES} images per message.`);
+          break;
+        }
+        if (!ALLOWED_TYPES.has(file.type)) {
+          appendLog("error", `"${file.name}" isn't a supported image type (use PNG, JPEG, WEBP, or GIF).`);
+          continue;
+        }
+        if (file.size > MAX_IMAGE_BYTES) {
+          appendLog("error", `"${file.name}" is too large (max ${MAX_IMAGE_BYTES / (1024*1024)}MB).`);
+          continue;
+        }
+
+        try {
+          const base64Data = await fileToBase64(file);
+          const previewUrl = URL.createObjectURL(file);
+          stagedImages.push({
+            mediaType: file.type,
+            base64Data,
+            fileName: file.name,
+            previewUrl,
+          });
+        } catch (err) {
+          appendLog("error", `Could not read "${file.name}": ${err.message}`);
+        }
+      }
+
+      renderPreviewTray();
+    }
+
+    function renderPreviewTray() {
+      tray.innerHTML = "";
+      if (stagedImages.length === 0) {
+        tray.style.display = "none";
+        return;
+      }
+      tray.style.display = "flex";
+
+      stagedImages.forEach((img, idx) => {
+        const item = document.createElement("div");
+        item.className = "preview-item";
+
+        const thumb = document.createElement("img");
+        thumb.src = img.previewUrl;
+        thumb.alt = img.fileName;
+        item.appendChild(thumb);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "preview-remove";
+        removeBtn.textContent = "×";
+        removeBtn.title = "Remove this image";
+        removeBtn.onclick = () => removeStagedImage(idx);
+        item.appendChild(removeBtn);
+
+        const name = document.createElement("div");
+        name.className = "preview-name";
+        name.textContent = img.fileName;
+        item.appendChild(name);
+
+        tray.appendChild(item);
+      });
+    }
+
+    function removeStagedImage(idx) {
+      URL.revokeObjectURL(stagedImages[idx].previewUrl);
+      stagedImages.splice(idx, 1);
+      renderPreviewTray();
+    }
+
+    function clearStagedImages() {
+      stagedImages.forEach(img => URL.revokeObjectURL(img.previewUrl));
+      stagedImages = [];
+      renderPreviewTray();
+    }
+
+    // ─── Drag and drop ───────────────────────────────────────────────
+    // We listen on document so the user can drop anywhere on the page —
+    // much more forgiving than a specific drop target.
+
+    const dropOverlay = document.getElementById("drop-overlay");
+    const inputRow    = document.getElementById("input-row");
+
+    // Track enter/leave depth to avoid flicker when the cursor crosses
+    // child elements (each child fires its own dragenter/dragleave).
+    let dragDepth = 0;
+
+    document.addEventListener("dragenter", e => {
+      // Only activate for file drags, not text selections being dragged
+      if (!e.dataTransfer.types.includes("Files")) return;
+      e.preventDefault();
+      dragDepth++;
+      dropOverlay.classList.add("active");
+      inputRow.classList.add("drag-over");
+    });
+
+    document.addEventListener("dragleave", e => {
+      if (!e.dataTransfer.types.includes("Files")) return;
+      dragDepth--;
+      if (dragDepth <= 0) {
+        dragDepth = 0;
+        dropOverlay.classList.remove("active");
+        inputRow.classList.remove("drag-over");
+      }
+    });
+
+    document.addEventListener("dragover", e => {
+      // Required to allow dropping (browser default is "no drop allowed")
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    });
+
+    document.addEventListener("drop", e => {
+      e.preventDefault();
+      dragDepth = 0;
+      dropOverlay.classList.remove("active");
+      inputRow.classList.remove("drag-over");
+
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        handleFileSelect(files);
+      }
+    });
+
+    // ─── Chart rendering ─────────────────────────────────────────────
+
+    function renderChart(chartData) {
+      const area = document.getElementById("chart-area");
+      area.style.display = "block";
+
+      const COLORS = [
+        "#2a78d6","#1baf7a","#eda100","#008300",
+        "#4a3aa7","#e34948","#e87ba4","#eb6834"
+      ];
+
+      if (chartInstance) { chartInstance.destroy(); }
+
+      const datasets = chartData.datasets.map((ds, i) => ({
+        ...ds,
+        backgroundColor: chartData.type === "line"
+          ? COLORS[i % COLORS.length] + "33"
+          : chartData.labels.map((_, j) => COLORS[j % COLORS.length]),
+        borderColor: COLORS[i % COLORS.length],
+        borderWidth: chartData.type === "line" ? 2 : 1,
+        fill: chartData.type === "line",
+      }));
+
+      chartInstance = new Chart(document.getElementById("myChart"), {
+        type: chartData.type,
+        data: { labels: chartData.labels, datasets },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: chartData.type === "pie" },
+            title: { display: !!chartData.title, text: chartData.title },
+          },
+        },
+      });
+
+      const notice = document.createElement("div");
+      notice.className = "chart-notice";
+      notice.textContent = `[chart rendered: ${chartData.title || chartData.type}]`;
+      log.appendChild(notice);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    // ─── Sending ─────────────────────────────────────────────────────
+
+    async function send(preset) {
+      const msg = preset || input.value.trim();
+      const imagesToSend = stagedImages.slice(); // snapshot before we clear the tray
+
+      if (!msg && imagesToSend.length === 0) return;
+
+      input.value = "";
+
+      if (msg) appendLog("user", msg);
+      if (imagesToSend.length > 0) appendUserImagesToLog(imagesToSend);
+
+      // Clear the staging tray immediately so the UI feels responsive,
+      // but keep the object URLs alive a moment via the thumbnails already in the log.
+      stagedImages = [];
+      renderPreviewTray();
+
+      showTyping();
+
+      try {
+        const res = await fetch("/api/chat", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({
+            message: msg,
+            session_id: SESSION_ID,
+            customer_id: CUSTOMER_ID,
+            images: imagesToSend.map(img => ({ media_type: img.mediaType, data: img.base64Data })),
+          }),
+        });
+
+        let data;
+        try {
+          data = await res.json();
+        } catch (parseErr) {
+          hideTyping();
+          appendLog("error", `Server returned a non-JSON response (HTTP ${res.status}). Check the terminal running main.py for the real error.`);
+          return;
+        }
+
+        hideTyping();
+
+        if (!res.ok || data.error) {
+          appendLog("error", `(HTTP ${res.status}) ${data.error || "Unknown error"}`);
+          return;
+        }
+
+        appendLog("bot", data.reply);
+        if (data.chart) renderChart(data.chart);
+      } catch (err) {
+        hideTyping();
+        appendLog("error", "Could not reach the server: " + err.message);
+      }
+    }
+
+    async function resetChat() {
+      await fetch("/api/reset", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ session_id: SESSION_ID }),
+      });
+      log.innerHTML = "";
+      clearStagedImages();
+      if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+      document.getElementById("chart-area").style.display = "none";
+      appendLog("bot", "Conversation reset. What would you like to know?");
+    }
+
+    async function loadCustomerInfo() {
+      const res = await fetch(`/api/customer?customer_id=${CUSTOMER_ID}`);
+      const data = await res.json();
+      const p = data.profile;
+      const s = data.summary;
+      document.getElementById("customer-info").textContent =
+        `${p.name} | Balance: $${p.balance.toLocaleString()} | ` +
+        `Income: $${s.total_income.toLocaleString()} | ` +
+        `Spent: $${s.total_expenses.toLocaleString()} | ` +
+        `Savings: $${p.savings_current.toLocaleString()} / $${p.savings_goal.toLocaleString()}`;
+    }
+
+    async function switchCustomer() {
+      CUSTOMER_ID = document.getElementById("customer-select").value;
+      // Fresh session per customer so conversation history doesn't bleed across profiles
+      SESSION_ID = "dev-" + Math.random().toString(36).slice(2, 8);
+      log.innerHTML = "";
+      clearStagedImages();
+      if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+      document.getElementById("chart-area").style.display = "none";
+      await loadCustomerInfo();
+      appendLog("bot", "Switched profile. What would you like to know?");
+    }
+
+    async function checkHealth() {
+      try {
+        const res = await fetch("/api/health");
+        const data = await res.json();
+        if (!data.api_key_configured) {
+          appendLog("error", "ANTHROPIC_API_KEY is not set on the server. Chat will fail until you set it and restart the server (see README).");
+        }
+      } catch (err) {
+        appendLog("error", "Could not reach the server at all. Is `python main.py` running?");
+      }
+    }
+
+    loadCustomerInfo();
+    checkHealth();
+    appendLog("bot", "Hi! I'm your finance assistant. Ask me anything about your spending, savings, or transactions — or attach a receipt/statement image with the + button.");
+
+    // ─── Compliance panel ─────────────────────────────────────────────
+    function openPanel() {
+      document.getElementById("compliance-panel").classList.add("open");
+      document.getElementById("panel-backdrop").classList.add("open");
+      document.body.style.overflow = "hidden"; // prevent background scroll
+    }
+
+    function closePanel() {
+      document.getElementById("compliance-panel").classList.remove("open");
+      document.getElementById("panel-backdrop").classList.remove("open");
+      document.body.style.overflow = "";
+    }
+
+    // Close on Escape key
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") closePanel();
+    });
+  </script>
+</body>
+</html>
